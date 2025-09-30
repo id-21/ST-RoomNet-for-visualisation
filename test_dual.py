@@ -1,0 +1,102 @@
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+import os
+from xml.etree import ElementTree
+import cv2
+import tensorflow as tf
+# import tensorflow_addons as tfa
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.callbacks import ModelCheckpoint
+from sklearn.model_selection import train_test_split
+from spatial_transformer_fixed import ProjectiveTransformerLayer
+#from tensorflow.keras.applications.xception import preprocess_input, Xception
+from tensorflow.keras.applications.convnext import ConvNeXtTiny, preprocess_input
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Model, load_model, Sequential
+from tensorflow.keras.layers import *
+from scipy.interpolate import interp1d
+import random
+import scipy.io
+import math
+from scipy import ndimage
+from sklearn.utils import shuffle
+
+
+val_path = 'E:/LSUN2016_surface_relabel/surface_relabel/val/'
+
+img = cv2.imread('room1.jpeg')
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+img = cv2.resize(img, (400 , 400))
+img1 =  np.array(img,copy=True)
+img = img[tf.newaxis,...]
+img = preprocess_input(img)
+
+# seg = cv2.imread(val_path+'sun_atssgbmizunolhzn.png',0)
+# seg = cv2.resize(seg, (400 ,400), interpolation= cv2.INTER_NEAREST)
+# seg = seg/51.0
+ 
+ref_img = tf.io.read_file('ref_img2.png')
+ref_img = tf.io.decode_png(ref_img)
+ref_img = tf.cast(ref_img, tf.float32) / 51.0
+ref_img = ref_img[tf.newaxis,...]
+#ref_img = tf.tile(ref_img, [1,1,1,1])
+print(ref_img.shape)
+
+
+base_model = ConvNeXtTiny(include_top=False, weights="imagenet", input_shape= (400,400,3), pooling = 'avg')
+theta = Dense(8)(base_model.output)
+# stl= ProjectiveTransformer((400,400)).transform(ref_img, theta)
+stl = ProjectiveTransformerLayer(ref_img, (400,400))(theta)
+model = Model(base_model.input, [stl, theta])  # Dual output: segmentation and theta
+
+
+model.summary()
+model.load_weights('Weight_ST_RroomNet_ConvNext.h5')
+
+
+seg_out, theta_out = model.predict(img)  # Unpack both outputs
+
+# Process segmentation output
+seg_out = np.rint(seg_out[0,:,:,0])
+print("=" * 60)
+print("SEGMENTATION OUTPUT")
+print("=" * 60)
+print("Shape:", seg_out.shape)
+print("Type:", type(seg_out))
+
+# Process theta output
+print("\n" + "=" * 60)
+print("THETA TRANSFORMATION PARAMETERS")
+print("=" * 60)
+print("Shape:", theta_out.shape)
+print("Theta values:", theta_out[0])
+print("\nTheta as 3x3 homography matrix:")
+theta_matrix = np.append(theta_out[0], 1.0).reshape(3, 3)
+print(theta_matrix)
+
+# Save segmentation output
+np.savetxt('st_roomnet_output.txt', seg_out, fmt='%.1f',
+            header=f'OUTPUT TYPE: {type(seg_out)}\nOUTPUT SHAPE: {seg_out.shape}\nSEGMENTATION OUTPUT:',
+            comments='')
+
+# Save theta parameters
+np.savetxt('theta_params.txt', theta_out, fmt='%.6f',
+           header='8 transformation parameters from ST-RoomNet\nThese form a 3x3 homography matrix with 9th element = 1.0')
+
+print("\nOutputs saved:")
+print("  - st_roomnet_output.txt (segmentation)")
+print("  - theta_params.txt (transformation parameters)")
+
+# Visualize results
+plt.figure('seg')
+plt.imshow(seg_out, vmin = 1, vmax= 5)
+plt.title('Segmentation Output')
+# plt.figure('gt')
+# plt.imshow(seg , vmin = 1, vmax= 5)
+plt.figure('img')
+plt.imshow(img1)
+plt.title('Input Image')
+plt.show()
+
