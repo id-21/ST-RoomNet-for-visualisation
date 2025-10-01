@@ -12,7 +12,8 @@ def load_st_roomnet_output(seg_file_path):
     Returns:
         numpy array with shape (400, 400) containing integer labels 0-4
     """
-    segmentation = np.loadtxt(seg_file_path).astype(int)
+    # Skip the first 3 header lines
+    segmentation = np.loadtxt(seg_file_path, skiprows=3).astype(int)
     return segmentation
 
 def load_segformer_output(confidence_file_path):

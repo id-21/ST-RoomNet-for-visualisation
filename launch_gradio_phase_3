@@ -1,0 +1,1 @@
+source venv/bin/activate && cd Integration\ Work/phase3_modules && python gradio_visualizer.py

@@ -9,6 +9,7 @@ import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import io
 
 from load_outputs import load_st_roomnet_output, load_segformer_output, resize_to_match
 from simple_mask_combination import combine_masks_simple
@@ -18,11 +19,11 @@ from st_roomnet_segformer_integration import process_room_image, get_integration
 
 def fig_to_pil(fig):
     """Convert matplotlib figure to PIL Image"""
-    fig.canvas.draw()
-    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
     plt.close(fig)
-    return Image.fromarray(buf)
+    return Image.open(buf)
 
 def visualize_wall_overlay(original_image, walls, alpha=0.5):
     """Overlay wall masks on original image with different colors"""
