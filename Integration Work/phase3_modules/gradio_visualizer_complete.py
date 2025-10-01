@@ -164,7 +164,7 @@ def process_complete_pipeline(room_image, wallpaper_image, wall_threshold,
         progress(0.2, desc="Running ST-RoomNet...")
 
         # Run complete pipeline
-        layout = process_room_image_from_array(
+        layout, st_seg, seg_conf, refined_masks = process_room_image_from_array(
             room_array,
             wall_threshold=wall_threshold,
             wall_labels=[1, 2, 3],  # Walls only
@@ -183,22 +183,13 @@ def process_complete_pipeline(room_image, wallpaper_image, wall_threshold,
         # 2. Normal vectors visualization
         normals_viz = visualize_normals(original_resized, layout.walls)
 
-        # 3. Mask grid
-        # Extract st_seg and refined_masks from walls
-        st_seg = np.zeros((400, 400), dtype=np.uint8)
-        refined_masks = {}
-        for wall in layout.walls:
-            label_mapping = {
-                'ceiling': 0, 'left_wall': 1, 'front_wall': 2,
-                'right_wall': 3, 'floor': 4
-            }
-            label = label_mapping.get(wall.wall_id, None)
-            if label is not None:
-                refined_masks[label] = wall.pixel_mask
-
+        # 3. Mask grid (now using actual ST-RoomNet segmentation)
         mask_grid = create_mask_grid(st_seg, refined_masks)
 
-        # 4. Apply wallpaper if requested
+        # 4. SegFormer binary mask (for comparison with old visualizer)
+        segformer_binary = (seg_conf > wall_threshold).astype(np.uint8) * 255
+
+        # 5. Apply wallpaper if requested
         wallpaper_result = None
         if apply_wallpaper_flag and wallpaper_image is not None:
             progress(0.7, desc="Applying wallpaper...")
@@ -262,6 +253,8 @@ def process_complete_pipeline(room_image, wallpaper_image, wall_threshold,
             Image.fromarray(original_resized),
             Image.fromarray(wall_overlay),
             Image.fromarray(normals_viz),
+            Image.fromarray(st_seg.astype(np.uint8)),  # ST-RoomNet segmentation
+            Image.fromarray(segformer_binary),  # SegFormer binary mask
             mask_grid,
             Image.fromarray(wallpaper_result) if wallpaper_result is not None else None,
             summary_text
@@ -270,7 +263,7 @@ def process_complete_pipeline(room_image, wallpaper_image, wall_threshold,
     except Exception as e:
         import traceback
         error_msg = f"### Error\n\n```\n{str(e)}\n\n{traceback.format_exc()}\n```"
-        return (None, None, None, None, None, error_msg)
+        return (None, None, None, None, None, None, None, error_msg)
 
 
 # Pre-initialize models when the app starts
@@ -319,13 +312,17 @@ with gr.Blocks(title="ST-RoomNet + SegFormer Complete Pipeline") as demo:
             original_output = gr.Image(label="Original (400x400)")
             wall_overlay_output = gr.Image(label="Wall Segmentation")
 
-    gr.Markdown("## Detailed Outputs")
+    gr.Markdown("## Model Outputs")
 
     with gr.Row():
+        st_output = gr.Image(label="ST-RoomNet Segmentation")
+        segformer_output = gr.Image(label="SegFormer Binary Mask")
         normals_output = gr.Image(label="Normal Vectors Visualization")
-        masks_output = gr.Image(label="Mask Grid")
+
+    gr.Markdown("## Combined Results")
 
     with gr.Row():
+        masks_output = gr.Image(label="Mask Grid")
         wallpaper_output = gr.Image(label="Wallpaper Applied")
 
     gr.Markdown("## Summary")
@@ -345,6 +342,8 @@ with gr.Blocks(title="ST-RoomNet + SegFormer Complete Pipeline") as demo:
             original_output,
             wall_overlay_output,
             normals_output,
+            st_output,
+            segformer_output,
             masks_output,
             wallpaper_output,
             summary_output

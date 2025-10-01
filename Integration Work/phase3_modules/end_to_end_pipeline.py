@@ -79,7 +79,7 @@ def process_room_image_complete(image_path: str,
                                 st_weights_path: str = ABS_PATH_TO_WEIGHTS,
                                 st_ref_img_path: str = ABS_PATH_TO_IMG,
                                 segformer_model_name: str = "nvidia/segformer-b2-finetuned-ade-512-512",
-                                use_cached_models: bool = True) -> RoomWallLayout:
+                                use_cached_models: bool = True) -> Tuple[RoomWallLayout, np.ndarray, np.ndarray, dict]:
     """
     Complete end-to-end pipeline from image path to RoomWallLayout with normal vectors.
 
@@ -93,7 +93,11 @@ def process_room_image_complete(image_path: str,
         use_cached_models: Use globally cached models (default: True)
 
     Returns:
-        RoomWallLayout object with complete Wall objects including normal vectors
+        Tuple of (layout, st_seg, seg_conf, refined_masks)
+        - layout: RoomWallLayout object with complete Wall objects including normal vectors
+        - st_seg: ST-RoomNet segmentation array (400, 400)
+        - seg_conf: SegFormer confidence map (400, 400)
+        - refined_masks: Dictionary of refined wall masks
     """
     # Initialize models
     if use_cached_models:
@@ -146,7 +150,7 @@ def process_room_image_complete(image_path: str,
 
     print(f"Pipeline complete! Created {len(walls)} visible walls with normal vectors.")
 
-    return layout
+    return layout, st_seg, seg_conf, refined_masks
 
 
 def process_room_image_from_array(image_array: np.ndarray,
@@ -155,7 +159,7 @@ def process_room_image_from_array(image_array: np.ndarray,
                                   st_weights_path: str = ABS_PATH_TO_WEIGHTS,
                                   st_ref_img_path: str = ABS_PATH_TO_IMG,
                                   segformer_model_name: str = "nvidia/segformer-b2-finetuned-ade-512-512",
-                                  use_cached_models: bool = True) -> RoomWallLayout:
+                                  use_cached_models: bool = True) -> Tuple[RoomWallLayout, np.ndarray, np.ndarray, dict]:
     """
     Complete end-to-end pipeline from numpy array to RoomWallLayout with normal vectors.
 
@@ -169,7 +173,11 @@ def process_room_image_from_array(image_array: np.ndarray,
         use_cached_models: Use globally cached models (default: True)
 
     Returns:
-        RoomWallLayout object with complete Wall objects including normal vectors
+        Tuple of (layout, st_seg, seg_conf, refined_masks)
+        - layout: RoomWallLayout object with complete Wall objects including normal vectors
+        - st_seg: ST-RoomNet segmentation array (400, 400)
+        - seg_conf: SegFormer confidence map (400, 400)
+        - refined_masks: Dictionary of refined wall masks
     """
     # Initialize models
     if use_cached_models:
@@ -222,7 +230,7 @@ def process_room_image_from_array(image_array: np.ndarray,
 
     print(f"Pipeline complete! Created {len(walls)} visible walls with normal vectors.")
 
-    return layout
+    return layout, st_seg, seg_conf, refined_masks
 
 
 def create_walls_from_masks_with_normals(refined_masks: dict,
