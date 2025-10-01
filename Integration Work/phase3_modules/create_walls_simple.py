@@ -24,14 +24,15 @@ SURFACE_TYPES = {
     4: "floor"
 }
 
-def create_wall_from_mask(mask, label, theta=None):
+def create_wall_from_mask(mask, label, theta=None, normal_vector=None):
     """
     Create Wall object from combined mask
 
     Args:
         mask: Binary mask (boolean or uint8 array)
         label: ST-RoomNet label (0-4)
-        theta: Optional theta parameters for normal calculation (future)
+        theta: Optional theta parameters for normal calculation (deprecated, use normal_vector)
+        normal_vector: Optional pre-computed normal vector (3D numpy array)
 
     Returns:
         Wall object
@@ -78,18 +79,19 @@ def create_wall_from_mask(mask, label, theta=None):
     else:
         wall.confidence = 0.0
 
-    # Normal vector calculation deferred to future refinement
-    wall.normal_vector = None
+    # Assign normal vector if provided
+    wall.normal_vector = normal_vector
 
     return wall
 
-def create_walls_from_masks(combined_masks, theta=None):
+def create_walls_from_masks(combined_masks, theta=None, normals_dict=None):
     """
     Create multiple Wall objects from mask dictionary
 
     Args:
         combined_masks: Dict of {label: mask}
-        theta: Optional theta parameters
+        theta: Optional theta parameters (deprecated)
+        normals_dict: Optional dict of {label: normal_vector} for assigning normals
 
     Returns:
         List of Wall objects
@@ -97,7 +99,10 @@ def create_walls_from_masks(combined_masks, theta=None):
     walls = []
 
     for label, mask in combined_masks.items():
-        wall = create_wall_from_mask(mask, label, theta)
+        # Get normal vector for this label if available
+        normal_vector = normals_dict.get(label, None) if normals_dict is not None else None
+
+        wall = create_wall_from_mask(mask, label, theta=theta, normal_vector=normal_vector)
         if wall.is_visible:
             walls.append(wall)
 

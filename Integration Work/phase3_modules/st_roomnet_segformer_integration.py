@@ -9,9 +9,10 @@ from simple_mask_combination import combine_masks_simple
 from edge_refinement_simple import refine_edges_with_st_boundaries
 from create_walls_simple import create_walls_from_masks
 from room_wall_layout import RoomWallLayout
+from normal_computation import compute_normal_vectors
 
 def process_room_image(image_path, st_output_path, segformer_confidence_path,
-                      wall_threshold=0.4, wall_labels=[1, 2, 3]):
+                      theta_path=None, wall_threshold=0.4, wall_labels=[1, 2, 3]):
     """
     Main function to process room image with both models
 
@@ -19,6 +20,7 @@ def process_room_image(image_path, st_output_path, segformer_confidence_path,
         image_path: Path to original room image
         st_output_path: Path to ST-RoomNet segmentation output
         segformer_confidence_path: Path to SegFormer confidence map
+        theta_path: Path to theta parameters file (optional, for normal computation)
         wall_threshold: Confidence threshold for SegFormer (default: 0.4)
         wall_labels: Labels to process (default: [1,2,3] for walls only)
 
@@ -51,17 +53,38 @@ def process_room_image(image_path, st_output_path, segformer_confidence_path,
         refined = refine_edges_with_st_boundaries(mask, st_plane)
         refined_masks[label] = refined
 
-    # Create Wall objects
+    # Compute normal vectors if theta available
+    normals_dict = None
+    if theta_path is not None:
+        print(f"Loading theta parameters from {theta_path}...")
+        try:
+            theta = np.loadtxt(theta_path, skiprows=2)  # Skip header lines
+            if len(theta) == 8:
+                print("Computing normal vectors...")
+                normals_dict = compute_normal_vectors(theta, wall_labels)
+            else:
+                print(f"Warning: Expected 8 theta values, got {len(theta)}")
+        except Exception as e:
+            print(f"Warning: Could not load theta parameters: {e}")
+
+    # Create Wall objects with normals
     print("Creating Wall objects...")
-    walls = create_walls_from_masks(refined_masks)
+    walls = create_walls_from_masks(refined_masks, normals_dict=normals_dict)
 
     # Create RoomWallLayout
     layout = RoomWallLayout(image_width=st_seg.shape[1],
                            image_height=st_seg.shape[0])
     layout.walls = walls
-    layout.model_source = "ST-RoomNet + SegFormer"
+
+    # Update model source to indicate normal vectors
+    if normals_dict is not None:
+        layout.model_source = "ST-RoomNet + SegFormer (with normal vectors)"
+    else:
+        layout.model_source = "ST-RoomNet + SegFormer"
 
     print(f"Created {len(walls)} visible walls")
+    if normals_dict is not None:
+        print(f"Computed normal vectors for {len(normals_dict)} surfaces")
 
     return layout, refined_masks, combined_masks
 
