@@ -22,13 +22,15 @@ from tensorflow.keras.layers import Dense
 
 from spatial_transformer_fixed import ProjectiveTransformerLayer
 
+ABS_PATH_TO_WEIGHTS = '/Users/ishan-aiworkspace/Documents/apps/ST-RoomNet-for-visualisation/Weight_ST_RroomNet_ConvNext.h5'
+ABS_PATH_TO_IMG = '/Users/ishan-aiworkspace/Documents/apps/ST-RoomNet-for-visualisation/Integration Work/images/ref_img2.png'
 
 # Global model cache to avoid reloading
 _cached_model = None
 _cached_ref_img = None
 
 
-def load_reference_image(ref_img_path: str = '../../images/ref_img2.png') -> tf.Tensor:
+def load_reference_image(ref_img_path: str = ABS_PATH_TO_IMG) -> tf.Tensor:
     """
     Load the reference cuboid image for spatial transformation.
 
@@ -54,8 +56,8 @@ def load_reference_image(ref_img_path: str = '../../images/ref_img2.png') -> tf.
     return ref_img
 
 
-def load_st_roomnet_model(weights_path: str = 'Weight_ST_RroomNet_ConvNext.h5',
-                          ref_img_path: str = '../../images/ref_img2.png',
+def load_st_roomnet_model(weights_path: str = ABS_PATH_TO_WEIGHTS,
+                          ref_img_path: str = ABS_PATH_TO_IMG,
                           use_cache: bool = True) -> Model:
     """
     Load ST-RoomNet model with dual output (segmentation + theta).
@@ -100,17 +102,37 @@ def load_st_roomnet_model(weights_path: str = 'Weight_ST_RroomNet_ConvNext.h5',
     # Spatial transformation layer
     stl = ProjectiveTransformerLayer(ref_img, (400, 400))(theta)
 
-    # Dual output model
-    model = Model(base_model.input, [stl, theta])
+    # First, create single-output model (matches trained weights structure)
+    single_output_model = Model(base_model.input, stl)
 
     # Load trained weights
-    model.load_weights(weights_path)
+    single_output_model.load_weights(weights_path)
+
+    # Now create dual-output model by extracting theta from intermediate layer
+    # Find the Dense(8) layer - it should be named 'dense' or 'dense_1'
+    theta_layer = None
+    for layer in single_output_model.layers:
+        if isinstance(layer, Dense):
+            # Check output shape - should be (None, 8)
+            output_shape = layer.output.shape
+            if output_shape[-1] == 8:
+                theta_layer = layer
+                break
+
+    if theta_layer is None:
+        raise RuntimeError("Could not find Dense(8) theta layer in model")
+
+    # Create dual-output model: [segmentation, theta]
+    dual_output_model = Model(
+        inputs=single_output_model.input,
+        outputs=[single_output_model.output, theta_layer.output]
+    )
 
     # Cache model
     if use_cache:
-        _cached_model = model
+        _cached_model = dual_output_model
 
-    return model
+    return dual_output_model
 
 
 def preprocess_image(image_path: str) -> tuple:
@@ -151,18 +173,15 @@ def preprocess_image_array(image_array: np.ndarray) -> tuple:
     Preprocess numpy array image for ST-RoomNet inference.
 
     Args:
-        image_array: Numpy array image (H, W, 3) in RGB or BGR
+        image_array: Numpy array image (H, W, 3) in RGB format
+                    (Standard for PIL, Gradio, and most numpy arrays)
 
     Returns:
         Tuple of (preprocessed_batch, original_rgb)
     """
-    # Convert BGR to RGB if needed (assume BGR if coming from cv2.imread)
-    if image_array.shape[2] == 3:
-        # Check if likely BGR (OpenCV format)
-        # Simple heuristic: if image was loaded by cv2, convert
-        img = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
-    else:
-        img = image_array.copy()
+    # Assume input is already RGB (standard for PIL/Gradio/numpy arrays)
+    # If you have BGR input from cv2.imread(), use preprocess_image() instead
+    img = image_array.copy()
 
     # Resize to 400x400
     img = cv2.resize(img, (400, 400))
@@ -200,12 +219,17 @@ def run_st_roomnet_inference(model: Model,
     # Process theta (extract from batch dimension)
     theta = theta_out[0]
 
+    print("Inference outputs: ")
+    print(f" seg_out shape: {seg_out.shape}, theta_out shape: {theta_out.shape}")
+    print(f" Segmentation shape: {segmentation.shape}, unique labels: {np.unique(segmentation)}")
+    print(f" Theta shape: {theta.shape}, values: {theta}")
+
     return segmentation, theta
 
 
 def inference_from_path(image_path: str,
                        model: Model = None,
-                       weights_path: str = 'Weight_ST_RroomNet_ConvNext.h5',
+                       weights_path: str = ABS_PATH_TO_WEIGHTS,
                        ref_img_path: str = 'ref_img2.png') -> tuple:
     """
     Complete inference pipeline from image path.
@@ -239,8 +263,8 @@ def inference_from_path(image_path: str,
 
 def inference_from_array(image_array: np.ndarray,
                         model: Model = None,
-                        weights_path: str = 'Weight_ST_RroomNet_ConvNext.h5',
-                        ref_img_path: str = 'ref_img2.png') -> tuple:
+                        weights_path: str = ABS_PATH_TO_WEIGHTS,
+                        ref_img_path: str = ABS_PATH_TO_IMG) -> tuple:
     """
     Complete inference pipeline from numpy array.
 
@@ -293,6 +317,7 @@ if __name__ == "__main__":
         'images',
         'room1.jpeg'
     )
+    test_image_path = ABS_PATH_TO_IMG.replace('ref_img2.png', 'room1.jpeg')
 
     if os.path.exists(test_image_path):
         print(f"\nRunning inference on {test_image_path}...")

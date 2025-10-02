@@ -1,2 +1,5 @@
 # Model weights
 *.h5
+Integration Work/phase3_modules/__pycache__/
+*.pyc
+**/__pycache__/
