@@ -1,24 +1,42 @@
-# ST-RoomNet: Learning Room Layout Estimation From Single Image Through Unsupervised Spatial Transformations
+# ST-RoomNet for Visualization
 
-This is the official implementation of ST-RoomNet: https://openaccess.thecvf.com/content/CVPR2023W/VOCVALC/html/Ibrahem_ST-RoomNet_Learning_Room_Layout_Estimation_From_Single_Image_Through_Unsupervised_CVPRW_2023_paper.html
+This repository contains two workflows for room layout visualization:
 
-The spatial transformer module is based on this repo: https://github.com/dantkz/spatial-transformer-tensorflow
+## Workflows
 
-We modified the spatial transformer module to work in Tensorflow2.x and added more features such as nearest neighbor interpolation in addition to the original bilinear and bicubic interpolations.
+### Workflow V1: Separate Processing
+Located in `workflow-v1-separate-processing/`
+- Run models separately and save outputs
+- Upload pre-computed results to Gradio visualizer
+- Good for: Testing, iterating on visualization
 
-requirements:
+### Workflow V2: Integrated Pipeline
+Located in `workflow-v2-integrated-pipeline/`
+- End-to-end processing in Gradio interface
+- Real-time model inference and visualization
+- Good for: Production use, demonstrations
 
-opencv 4.4.1
+## Directory Structure
 
-tensorflow 2.9.1
+```
+ST-RoomNet-for-visualisation/
+├── workflow-v1-separate-processing/
+│   ├── 1-model-inference/
+│   └── 2-gradio-visualizer/
+├── workflow-v2-integrated-pipeline/
+│   ├── main.py
+│   └── modules/
+├── shared/
+├── images/
+└── weights/
+```
 
-If you use this code, please cite the paper as follows:
+## Getting Started
 
-@InProceedings{Ibrahem_2023_CVPR,<br>
-    author    = {Ibrahem, Hatem and Salem, Ahmed and Kang, Hyun-Soo},<br>
-    title     = {ST-RoomNet: Learning Room Layout Estimation From Single Image Through Unsupervised Spatial Transformations},<br>
-    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},<br>
-    month     = {June},<br>
-    year      = {2023},<br>
-    pages     = {3375-3383}<br>
-}
+1. Install dependencies (requirements.txt)
+2. Download model weights to `weights/`
+3. Choose your workflow and follow the README in that directory
+
+## Shared Resources
+
+Common files used by both workflows are in the `shared/` directory.
