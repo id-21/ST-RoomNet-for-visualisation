@@ -1,0 +1,37 @@
+============================================================
+V2 BASELINE EDGE BLEEDING ANALYSIS
+============================================================
+
+Image: /Users/ishan-aiworkspace/Documents/apps/ST-RoomNet-for-visualisation/workflow-v3-research-driven/test_images/room1.jpeg
+Wall threshold: 0.4
+
+
+LEFT_WALL:
+----------------------------------------
+  total_combined_pixels: 46508
+  total_refined_pixels: 48229
+  pixels_added_by_refinement: 1751
+  pixels_contradicting_segformer: 1749
+  percentage_contradicting: 3.626448817101744
+  within_5px_buffer: 1721
+  percentage_in_buffer: 98.39908519153802
+
+FRONT_WALL:
+----------------------------------------
+  total_combined_pixels: 186
+  total_refined_pixels: 1408
+  pixels_added_by_refinement: 1242
+  pixels_contradicting_segformer: 1227
+  percentage_contradicting: 87.14488636363636
+  within_5px_buffer: 1225
+  percentage_in_buffer: 99.83700081499592
+
+RIGHT_WALL:
+----------------------------------------
+  total_combined_pixels: 10
+  total_refined_pixels: 72
+  pixels_added_by_refinement: 72
+  pixels_contradicting_segformer: 68
+  percentage_contradicting: 94.44444444444444
+  within_5px_buffer: 68
+  percentage_in_buffer: 100.0
