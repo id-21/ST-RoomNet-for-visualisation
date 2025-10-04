@@ -5,10 +5,17 @@ You are working on workflow-v3 of a wallpaper visualization system that combines
 </system_context>
 
 <critical_notes>
-## CRITICAL ISSUES TO FIX
-- **Edge bleeding bug**: ST-RoomNet boundaries override SegFormer semantics in edge_refinement_simple.py - NEVER let geometric boundaries override semantic understanding
+## CRITICAL ISSUES STATUS
+
+### ✅ FIXED
+- **Edge bleeding bug**: FIXED via Option A - removed edge refinement entirely, combined AND mask respects semantic understanding (commit 78f3489)
+
+### 🔄 IN PROGRESS
 - **Resolution degradation**: 400x400 constraint destroys image quality - must preserve original resolution in final output
 - **Aspect ratio distortion**: Square processing breaks room proportions - maintain original aspect ratio
+  - These two issues are LINKED and must be solved together
+
+### ⏳ PENDING
 - **Normal vector inaccuracy**: Current normals don't match expected geometry - validate against known references
 </critical_notes>
 

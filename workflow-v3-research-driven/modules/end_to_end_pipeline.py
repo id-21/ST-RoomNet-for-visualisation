@@ -123,13 +123,11 @@ def process_room_image_complete(image_path: str,
     print(f"Combining masks with threshold={wall_threshold}...")
     combined_masks = combine_masks_simple(st_seg, seg_conf, wall_threshold=wall_threshold, wall_labels=wall_labels)
 
-    # 5. Refine edges
-    print("Refining edges...")
-    refined_masks = {}
-    for label, mask in combined_masks.items():
-        st_plane = (st_seg == label)
-        refined = refine_edges_with_st_boundaries(mask, st_plane)
-        refined_masks[label] = refined
+    # 5. Skip edge refinement (Option A fix for edge bleeding bug)
+    # The combined AND mask already has correct semantic boundaries
+    # Edge refinement was overriding SegFormer with ST-RoomNet geometry
+    print("Using combined masks (edge refinement disabled)...")
+    refined_masks = combined_masks.copy()
 
     # 6. Compute normal vectors from theta
     print("Computing normal vectors...")
@@ -203,13 +201,11 @@ def process_room_image_from_array(image_array: np.ndarray,
     print(f"Combining masks with threshold={wall_threshold}...")
     combined_masks = combine_masks_simple(st_seg, seg_conf, wall_threshold=wall_threshold, wall_labels=wall_labels)
 
-    # 5. Refine edges
-    print("Refining edges...")
-    refined_masks = {}
-    for label, mask in combined_masks.items():
-        st_plane = (st_seg == label)
-        refined = refine_edges_with_st_boundaries(mask, st_plane)
-        refined_masks[label] = refined
+    # 5. Skip edge refinement (Option A fix for edge bleeding bug)
+    # The combined AND mask already has correct semantic boundaries
+    # Edge refinement was overriding SegFormer with ST-RoomNet geometry
+    print("Using combined masks (edge refinement disabled)...")
+    refined_masks = combined_masks.copy()
 
     # 6. Compute normal vectors from theta
     print("Computing normal vectors...")
