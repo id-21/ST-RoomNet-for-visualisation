@@ -23,12 +23,16 @@ class WallpaperPattern:
         tile_height: Height of a single tile in pixels (for future tiling)
         offset_x: Horizontal offset for pattern alignment (for future use)
         offset_y: Vertical offset for pattern alignment (for future use)
+        wall_height_inches: Real-world wall height in inches (default: 108)
+        pattern_height_inches: Real-world pattern repeat height in inches (default: 21)
     """
     image: np.ndarray
     tile_width: Optional[int] = None
     tile_height: Optional[int] = None
     offset_x: float = 0.0
     offset_y: float = 0.0
+    wall_height_inches: float = 108.0
+    pattern_height_inches: float = 21.0
 
 
 def compute_perspective_from_normal(normal_vector: np.ndarray,
@@ -143,22 +147,31 @@ def apply_wallpaper(wallpaper_pattern: WallpaperPattern,
         # Empty mask, return empty image
         return np.zeros((mask_height, mask_width, 4), dtype=np.uint8)
 
-    x_min, x_max = x_coords.min(), x_coords.max()
-    y_min, y_max = y_coords.min(), y_coords.max()
-    bbox_width = x_max - x_min + 1
-    bbox_height = y_max - y_min + 1
-
-    # Prepare wallpaper pattern (tile to cover bounding box)
+    # Prepare wallpaper pattern with metric-based scaling
     pattern = wallpaper_pattern.image
     pattern_h, pattern_w = pattern.shape[:2]
 
-    # Tile pattern to at least cover the bounding box
-    tiles_x = max(1, int(np.ceil(bbox_width / pattern_w)))
-    tiles_y = max(1, int(np.ceil(bbox_height / pattern_h)))
+    # Calculate how many vertical repeats needed based on real-world dimensions
+    # wall_height_inches / pattern_height_inches = number of repeats
+    repeats_needed = wallpaper_pattern.wall_height_inches / wallpaper_pattern.pattern_height_inches
 
-    tiled_pattern = np.tile(pattern, (tiles_y, tiles_x, 1))
-    # Crop to exact bbox size
-    tiled_pattern = tiled_pattern[:bbox_height, :bbox_width]
+    # Scale the pattern so that repeats_needed fits into mask_height
+    # One repeat should be: mask_height / repeats_needed pixels tall
+    scaled_pattern_height = mask_height / repeats_needed
+    scale_factor = scaled_pattern_height / pattern_h
+
+    # Resize pattern to correct scale
+    scaled_pattern = cv2.resize(pattern, None, fx=scale_factor, fy=scale_factor,
+                                interpolation=cv2.INTER_LINEAR)
+    scaled_h, scaled_w = scaled_pattern.shape[:2]
+
+    # Tile the scaled pattern to cover entire image dimensions (with extra for safety)
+    tiles_y = int(np.ceil(mask_height / scaled_h)) + 2
+    tiles_x = int(np.ceil(mask_width / scaled_w)) + 2
+
+    tiled_pattern = np.tile(scaled_pattern, (tiles_y, tiles_x, 1))
+    # Crop to exact mask dimensions
+    tiled_pattern = tiled_pattern[:mask_height, :mask_width]
 
     # Apply perspective transformation if normal vector available
     if use_normal_perspective and hasattr(wall_object, 'normal_vector') and wall_object.normal_vector is not None:
