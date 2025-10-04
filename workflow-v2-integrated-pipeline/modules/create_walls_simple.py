@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import numpy as np
 import cv2
-from room_wall_layout import Wall, RoomWallLayout
+from .room_wall_layout import Wall, RoomWallLayout
 
 # Label mappings from ST-RoomNet
 LABEL_NAMES = {
