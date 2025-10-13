@@ -31,14 +31,15 @@ Test integration of RGB→X diffusion model's irradiance (shadow) output with ST
    - Fallback: Loaded JPG preview and converted to linear RGB via gamma correction (value^2.2)
    - Resized shadow from 682×1024 to 400×400 to match ST-RoomNet output
 
-4. **Shadow Application (Per-Wall)**
+4. **Shadow Application (Per-Wall) - CORRECTED**
+   - **IMPORTANT:** EXR irradiance values are INVERTED (high values = shadows, low values = bright)
    - **Left Wall:**
-     - Baseline brightness: 0.383 (98th percentile of wall shadow pixels)
-     - Normalized shadow range: [0.400, 1.000] (clamped for ambient light)
+     - Irradiance range: min (bright areas) to max (shadows)
+     - Inverted shadow multiplier range: [0.400, 1.000] (clamped for ambient light)
    - **Right Wall:**
-     - Baseline brightness: 0.305 (98th percentile)
-     - Normalized shadow range: [0.400, 1.000]
-   - Applied in linear RGB space: `wallpaper_linear × shadow_mask`
+     - Irradiance range: min (bright areas) to max (shadows)
+     - Inverted shadow multiplier range: [0.400, 1.000]
+   - Applied in linear RGB space: `wallpaper_linear × shadow_multiplier` (after inversion)
    - Converted back to sRGB for display
 
 ## Results
@@ -55,15 +56,16 @@ Test integration of RGB→X diffusion model's irradiance (shadow) output with ST
 
 **Successful Integration:**
 - ✅ Shadow overlay successfully applied to both detected walls
-- ✅ Per-wall baseline normalization preserved relative lighting differences
+- ✅ Per-wall min/max normalization with inversion preserved relative lighting differences
 - ✅ Ambient light clamping (0.4 minimum) prevented unrealistic black shadows
 - ✅ Linear RGB processing maintained color fidelity (no visible hue shifts)
+- ⚠️ **CORRECTED:** Fixed inverted shadow application - EXR has high values for shadows (not brightness as initially assumed)
 
 **Technical Notes:**
 - Used JPG preview as EXR fallback (OpenCV compiled without OpenEXR support)
 - JPG → Linear conversion approximation: `(value/255)^2.2`
-- Right wall has lower baseline (0.305) → more shadowed overall compared to left wall (0.383)
-- Shadow normalization clamps at 0.4-1.0 range for realistic ambient lighting
+- **Inversion step critical:** High irradiance values inverted to low multipliers (darkening effect)
+- Shadow multiplier normalization clamps at 0.4-1.0 range for realistic ambient lighting
 
 ## Visual Quality Assessment
 
@@ -87,11 +89,19 @@ Test integration of RGB→X diffusion model's irradiance (shadow) output with ST
 
 ### Color Space Handling
 ```python
+# Normalize irradiance: high values (shadows) → low multipliers (darken)
+# IMPORTANT: EXR has INVERTED values (high = shadow, low = bright)
+min_val = np.percentile(wall_shadow, 2)   # Bright areas
+max_val = np.percentile(wall_shadow, 98)  # Dark shadows
+normalized = (shadow_gray - min_val) / (max_val - min_val)
+shadow_multiplier = 1.0 - normalized  # INVERT: high irradiance → low multiplier
+shadow_multiplier = np.clip(shadow_multiplier, 0.4, 1.0)
+
 # Convert wallpaper to linear RGB
 wallpaper_linear = (wallpaper_srgb / 255.0) ** 2.2
 
-# Multiply shadow (already linear from EXR/conversion)
-shadowed = wallpaper_linear * normalized_shadow
+# Multiply shadow multiplier (already linear from EXR/conversion + inversion)
+shadowed = wallpaper_linear * shadow_multiplier
 
 # Convert back to sRGB for display
 result = (shadowed ** (1/2.2)) * 255.0
@@ -117,6 +127,7 @@ python test_shadow_overlay.py
 
 **For Further Experimentation:**
 - Test different ambient clamp values (0.3, 0.5, 0.6)
-- Compare baseline percentile options (95th, 98th, 99th)
+- Compare min/max percentile options (2nd/95th, 2nd/98th, 5th/99th)
 - Evaluate shadow quality on saturated wallpaper colors
 - Test with multiple room images and lighting conditions
+- Validate inversion correctness with known shadow patterns

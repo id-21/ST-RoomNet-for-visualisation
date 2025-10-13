@@ -64,14 +64,16 @@
 **Actions:**
 1. Create `apply_shadow_to_wall(wallpaper_rgb, shadow_exr, wall_mask, ambient_clamp)` function
 2. Extract wall shadow region: `wall_shadow = shadow_exr[wall_mask]`
-3. Compute baseline: `baseline = np.percentile(wall_shadow, 98)`
-4. Normalize shadow: `normalized = np.clip(shadow_exr / baseline, ambient_clamp, 1.0)`
-5. Convert wallpaper to linear: `wallpaper_linear = (wallpaper_rgb / 255.0) ** 2.2`
-6. Multiply: `shadowed = wallpaper_linear * normalized`
-7. Convert back to sRGB: `result = (shadowed ** (1/2.2)) * 255.0`
-8. Test: Apply to dummy 100×100 wallpaper with synthetic shadow
+3. Establish value range (CORRECTED): `min_val = np.percentile(wall_shadow, 2); max_val = np.percentile(wall_shadow, 98)`
+4. Normalize to 0-1: `normalized = (shadow_exr - min_val) / (max_val - min_val)`
+5. INVERT (HIGH EXR = shadows → LOW multiplier): `shadow_multiplier = 1.0 - normalized`
+6. Clamp: `shadow_multiplier = np.clip(shadow_multiplier, ambient_clamp, 1.0)`
+7. Convert wallpaper to linear: `wallpaper_linear = (wallpaper_rgb / 255.0) ** 2.2`
+8. Multiply: `shadowed = wallpaper_linear * shadow_multiplier`
+9. Convert back to sRGB: `result = (shadowed ** (1/2.2)) * 255.0`
+10. Test: Apply to dummy 100×100 wallpaper with synthetic shadow
 
-**Success criteria:** Function returns uint8 array with shadowed wallpaper, no NaN/inf values
+**Success criteria:** Function returns uint8 array with shadowed wallpaper, no NaN/inf values, high EXR values darken output
 
 ### Step 4: Implement Comparison Image Generator
 **Files:** `experiments/shadow-overlay-test/test_shadow_overlay.py`

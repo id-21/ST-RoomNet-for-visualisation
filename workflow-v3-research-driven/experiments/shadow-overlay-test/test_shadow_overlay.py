@@ -5,6 +5,9 @@ Shadow Overlay Experiment - V3 Pipeline Enhancement
 Tests shadow overlay on ST-RoomNet V3 wallpaper output using pre-computed
 RGB→X irradiance shadow maps. Compares wallpaper with and without shadows.
 
+CORRECTED: Fixed inverted shadow application where the EXR irradiance file
+has HIGH values for shadows (not bright areas as originally assumed).
+
 Following pattern from: experiments/v2-baseline-analysis/run_v2_baseline.py
 Research doc: research/04-shadow-overlay-integration-research.md
 Planning doc: planning/shadow-overlay-experiment-plan.md
@@ -95,14 +98,23 @@ def apply_shadow_to_wall(wallpaper_rgb, shadow_exr, wall_mask, ambient_clamp=0.4
     """
     Apply shadow to wallpaper for a single wall using linear RGB multiplication.
 
-    Implements 5-step shadow extraction strategy from:
-    research/04-shadow-overlay-integration-research.md (Shadow Extraction Strategy)
+    IMPORTANT: This implementation corrects for INVERTED irradiance values where:
+    - High EXR values represent DARK shadows (should darken wallpaper)
+    - Low EXR values represent BRIGHT areas (should keep wallpaper bright)
+
+    Implements corrected 6-step shadow extraction strategy:
+    1. Isolate wall region
+    2. Establish min/max irradiance range for normalization
+    3. Normalize to 0-1 (0=bright, 1=dark)
+    4. INVERT to create shadow multiplier (1=no darkening, low=darken)
+    5. Clamp to preserve ambient light
+    6. Multiply in linear RGB space
 
     Args:
         wallpaper_rgb: Wallpaper image (H, W, 3) uint8 in sRGB space
-        shadow_exr: Shadow map (H, W, 3) float32 in linear space
+        shadow_exr: Shadow map (H, W, 3) float32 - HIGH values = shadows
         wall_mask: Boolean mask (H, W) defining wall region
-        ambient_clamp: Minimum shadow value (default 0.4 for ambient light)
+        ambient_clamp: Minimum shadow multiplier (default 0.4 for ambient light)
 
     Returns:
         np.ndarray: Shadowed wallpaper (H, W, 3) uint8 in sRGB space
@@ -112,34 +124,41 @@ def apply_shadow_to_wall(wallpaper_rgb, shadow_exr, wall_mask, ambient_clamp=0.4
         print("    Warning: Empty wall mask, skipping shadow application")
         return wallpaper_rgb
 
-    # Step 2: Establish baseline brightness (98th percentile of wall pixels)
-    # Extract wall shadow values (average across RGB channels for brightness)
+    # Step 2: Establish value range for normalization
+    # IMPORTANT: EXR irradiance has INVERTED relationship:
+    # - High EXR values = darkest shadows (should darken wallpaper)
+    # - Low EXR values = brightest areas (should keep wallpaper bright)
     wall_shadow_pixels = shadow_exr[wall_mask].mean(axis=1)  # Average RGB per pixel
-    baseline = np.percentile(wall_shadow_pixels, 98)
+    min_val = np.percentile(wall_shadow_pixels, 2)   # Brightest areas (low irradiance values)
+    max_val = np.percentile(wall_shadow_pixels, 98)  # Darkest shadows (high irradiance values)
 
-    print(f"    Baseline brightness: {baseline:.3f} (98th percentile)")
+    print(f"    Irradiance range: min={min_val:.3f} (bright), max={max_val:.3f} (shadow)")
 
-    # Handle edge case: completely dark wall
-    if baseline < 1e-6:
-        print(f"    Warning: Baseline too low ({baseline:.3e}), using fallback value 0.1")
-        baseline = 0.1
+    # Handle edge case: no variation in shadow
+    if max_val - min_val < 1e-6:
+        print(f"    Warning: No shadow variation detected, skipping shadow application")
+        return wallpaper_rgb
 
-    # Step 3: Create relative shadow mask (normalize by baseline)
-    # Work with grayscale shadow for simpler normalization
+    # Step 3: Normalize to 0-1 range where 0=bright, 1=dark
     shadow_gray = shadow_exr.mean(axis=2)  # Convert to grayscale
-    normalized_shadow = shadow_gray / baseline
+    normalized = (shadow_gray - min_val) / (max_val - min_val)
+    normalized = np.clip(normalized, 0.0, 1.0)
 
-    # Step 4: Clamp to preserve ambient light
-    normalized_shadow = np.clip(normalized_shadow, ambient_clamp, 1.0)
+    # Step 4: INVERT so that high irradiance (shadows) → low multiplier (darken)
+    # and low irradiance (bright) → high multiplier (stay bright)
+    shadow_multiplier = 1.0 - normalized
 
-    print(f"    Normalized shadow range: [{normalized_shadow.min():.3f}, {normalized_shadow.max():.3f}]")
+    # Step 5: Clamp to preserve ambient light (don't go below ambient_clamp)
+    shadow_multiplier = np.clip(shadow_multiplier, ambient_clamp, 1.0)
 
-    # Step 5: Apply to wallpaper (multiply in linear space)
+    print(f"    Shadow multiplier range: [{shadow_multiplier.min():.3f}, {shadow_multiplier.max():.3f}]")
+
+    # Step 6: Apply to wallpaper (multiply in linear space)
     # Convert wallpaper from sRGB to linear
     wallpaper_linear = (wallpaper_rgb.astype(np.float32) / 255.0) ** 2.2
 
     # Apply shadow (broadcast grayscale shadow to RGB)
-    shadow_3ch = normalized_shadow[:, :, np.newaxis]  # (H, W, 1)
+    shadow_3ch = shadow_multiplier[:, :, np.newaxis]  # (H, W, 1)
     shadowed_linear = wallpaper_linear * shadow_3ch
 
     # Convert back to sRGB

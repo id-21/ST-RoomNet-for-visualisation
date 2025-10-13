@@ -85,38 +85,50 @@ Create an experimental script to test if RGB→X model's irradiance shadow maps 
 
 ### Shadow Extraction Strategy
 
-**From `understanding-shadow.md:113-141` - 5-step process:**
+**From `understanding-shadow.md:113-141` - 6-step process (CORRECTED for inverted irradiance):**
 
 **Step 1: Isolate Wall Region**
 - Use ST-RoomNet normal detection + SegFormer semantic mask
 - Ensures analyzing shadow patterns only on target wall, not furniture/other surfaces
 - Current v3 implementation: `modules/simple_mask_combination.py` + `modules/edge_refinement_simple.py`
 
-**Step 2: Establish Baseline Brightness**
-- Find brightest areas of wall (98th percentile to avoid specular highlight outliers)
-- Represents "fully lit" reference for relative shadow computation
-- Formula: `baseline = np.percentile(irradiance[wall_mask], 98)`
+**Step 2: Establish Value Range (CORRECTED)**
+- **IMPORTANT:** EXR irradiance has INVERTED relationship:
+  - HIGH values = dark shadows (should darken wallpaper)
+  - LOW values = bright areas (should keep wallpaper bright)
+- Find min (2nd percentile, bright) and max (98th percentile, shadow) for normalization
+- Avoids specular highlight outliers while capturing full shadow range
+- Formula: `min_val = np.percentile(irradiance[wall_mask], 2)`
+- Formula: `max_val = np.percentile(irradiance[wall_mask], 98)`
 
-**Step 3: Create Relative Shadow Mask**
-- Divide irradiance by baseline to normalize
+**Step 3: Normalize to 0-1 Range**
+- Normalize irradiance where 0=bright areas, 1=dark shadows
+- Maps the full shadow variation range to standardized scale
+- Formula: `normalized = (irradiance - min_val) / (max_val - min_val)`
+- Result: `normalized = np.clip(normalized, 0.0, 1.0)`
+
+**Step 4: INVERT to Create Shadow Multiplier**
+- Invert so high irradiance (shadows) → low multiplier (darken wallpaper)
+- And low irradiance (bright) → high multiplier (keep wallpaper bright)
+- This step is CRITICAL to correct the inverted EXR relationship
+- Formula: `shadow_multiplier = 1.0 - normalized`
 - Results in values where:
-  - 1.0 = fully lit areas (no shadow)
-  - 0.5 = half brightness (moderate shadow)
-  - 0.2 = heavily shadowed
-- Formula: `shadow_mask = irradiance / baseline`
+  - 1.0 = fully lit areas (no darkening)
+  - 0.6 = moderate shadow (40% darkening)
+  - 0.4 = heavily shadowed (60% darkening, clamped minimum)
 
-**Step 4: Clamp to Preserve Ambient Light**
+**Step 5: Clamp to Preserve Ambient Light**
 - Real rooms have ambient light from bounce lighting
 - Prevent pure black shadows (unrealistic)
 - Recommended clamp: 0.4-0.5 minimum
-- Formula: `shadow_mask = np.clip(shadow_mask, 0.4, 1.0)`
+- Formula: `shadow_multiplier = np.clip(shadow_multiplier, 0.4, 1.0)`
 - Reference: `understanding-shadow.md:137` - "maintains realism"
 
-**Step 5: Apply to Wallpaper**
-- Multiply warped wallpaper by shadow mask (in LINEAR space)
+**Step 6: Apply to Wallpaper**
+- Multiply warped wallpaper by shadow_multiplier (in LINEAR space)
 - Areas with 1.0 remain unchanged
-- Areas with 0.5 darken by 50%
-- Formula: `result = wallpaper_linear * shadow_mask`
+- Areas with 0.4 darken by 60%
+- Formula: `result = wallpaper_linear * shadow_multiplier`
 
 ### Color Space Requirements
 
@@ -131,13 +143,20 @@ Create an experimental script to test if RGB→X model's irradiance shadow maps 
 - Saturated colors (reds, blues) show visible hue shifts if processed in sRGB
 - Reference: `understanding-shadow.md:95-98` - "vibrant/saturated colors show color shifts if processed in sRGB"
 
-**Conversion Process:**
+**Conversion Process (CORRECTED):**
 ```
+# Normalize and INVERT irradiance (HIGH EXR = shadows → LOW multiplier)
+min_val = np.percentile(irradiance[wall_mask], 2)
+max_val = np.percentile(irradiance[wall_mask], 98)
+normalized = (irradiance - min_val) / (max_val - min_val)
+shadow_multiplier = 1.0 - normalized  # CRITICAL INVERSION STEP
+shadow_multiplier = np.clip(shadow_multiplier, 0.4, 1.0)
+
 # sRGB to Linear (for wallpaper input)
 wallpaper_linear = wallpaper_srgb ** 2.2
 
 # Multiply in linear space
-shadowed = wallpaper_linear * shadow_mask  # shadow_mask already linear from EXR
+shadowed = wallpaper_linear * shadow_multiplier  # shadow_multiplier already linear
 
 # Linear to sRGB (for display output)
 result_srgb = shadowed ** (1/2.2)
