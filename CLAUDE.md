@@ -128,3 +128,11 @@ python gradio_visualizer.py  # Upload outputs from step 1
 - Reference for understanding architectural decisions
 - Not intended for active development
 </workflow_comparison>
+
+## Setup / rebuild
+`venv/` (~2.6 GB) is disposable; `requirements.txt` here is a `pip freeze` of the working venv (Python 3.13; TensorFlow 2.20, Keras 3.11, PyTorch 2.10). `Integration Work/segformer-model/requirements.txt` is a separate, smaller list.
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```
+Weights are not in git: `Weight_ST_RroomNet_ConvNext.h5` (107 MB) sits in the project root and the other weights go in `weights/`. Keep them.
