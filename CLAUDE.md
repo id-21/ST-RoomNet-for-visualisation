@@ -135,4 +135,4 @@ python gradio_visualizer.py  # Upload outputs from step 1
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
-Weights are not in git: `Weight_ST_RroomNet_ConvNext.h5` (107 MB) sits in the project root and the other weights go in `weights/`. Keep them.
+Weights are not in git. `Weight_ST_RroomNet_ConvNext.h5` (107 MB, required in the repo root) has NO known download source; the only backup copy is `~/Documents/data-backup/apps/ST-RoomNet-for-visualisation/Weight_ST_RroomNet_ConvNext.h5`. Restore it from there (or record its source here). SegFormer weights auto-download from Hugging Face; other weights go in `weights/`.
